@@ -3,7 +3,8 @@
 A **1.02B-parameter Mixture-of-Experts language model trained entirely from scratch** on 2× Tesla T4
 (Kaggle, ~52 GPU-hours), including its own BPE tokenizer, data pipeline, and distributed training setup.
 
-Weights are published on Hugging Face as **KochiLLM-v1.0**.
+Weights: **[`ShayonSarker/KochiLLM-v1.0`](https://huggingface.co/ShayonSarker/KochiLLM-v1.0)** on Hugging Face
+· Code: **[`Dadhichi-Sarker-Shayon/KochiLLM-v1.0`](https://github.com/Dadhichi-Sarker-Shayon/KochiLLM-v1.0)**
 
 ---
 
@@ -186,7 +187,8 @@ session exits the loop normally and also writes the endpoint checkpoint.
 
 ## Publishing weights
 
-`notebooks/05_upload_hf.ipynb` publishes the model to **`<hf-username>/KochiLLM-v1.0`**.
+`notebooks/05_upload_hf.ipynb` publishes the model to **[`ShayonSarker/KochiLLM-v1.0`](https://huggingface.co/ShayonSarker/KochiLLM-v1.0)**
+(repo created and ready; the notebook resolves the account from your Hugging Face token).
 
 It converts the most-trained checkpoint of **every attached run** to bf16 safetensors (~2.05 GB) and
 pushes each as its own git revision tagged `run-NN`, with `metadata.json` recording step count,
