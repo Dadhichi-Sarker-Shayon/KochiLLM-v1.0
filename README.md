@@ -715,9 +715,13 @@ accumulate rather than clobber.
 **Not an `AutoModel` release.** The tokenizer is a custom pickle and the architecture is custom code,
 so the repo ships `architecture.py`, `tokenizer.py`, `data_loader.py`, `generate.py`,
 `prepare_data.py`, `train_custom.py`, `custom_bpe_tokenizer.pkl`, and a per-run `config.json` +
-`model.safetensors`, plus load instructions in the model card. Embedding and output projection are
-tied, so `output.weight` is omitted from each safetensors file (recorded in `metadata.json`) and
-restored on load:
+`model.safetensors`, plus load instructions in the model card.
+
+Embedding and output projection are tied. The FSDP full-state-dict gather emits them as two separate
+arrays, so **both appear in each safetensors file and are byte-identical** (verified by range-reading
+`run-09` across all 98.3 MB), and `load_state_dict` works with `strict=True`. The
+`sd['output.weight'] = sd['embed.weight']` line below is a no-op for these checkpoints and additionally
+supports any checkpoint saved without FSDP:
 
 ```python
 import json, torch
@@ -734,7 +738,7 @@ tok.load('custom_bpe_tokenizer.pkl')
 
 model = MyCustomLLM(**config)                 # re-ties embed.weight <-> output.weight
 sd = load_file(hf_hub_download(REPO, 'runs/%s/model.safetensors' % TAG, token=...))
-sd['output.weight'] = sd['embed.weight']      # dropped at save time
+sd['output.weight'] = sd['embed.weight']      # no-op here: FSDP emits both, byte-identical
 model.load_state_dict(sd, strict=False)
 model.eval().cuda().to(torch.bfloat16)
 ```
