@@ -104,7 +104,7 @@ Every tracked file, and what it is for.
 | [`notebooks/02_phase2_pretrain.ipynb`](notebooks/02_phase2_pretrain.ipynb) | Phase 2. Streams FineWeb-Edu + Cosmopedia-v2, encodes ~200M tokens with the **frozen** tokenizer, then trains. |
 | [`notebooks/03_phase2_continue.ipynb`](notebooks/03_phase2_continue.ipynb) | **Self-resuming.** Finds the newest `latest_backup_model.pth`, validates the data shards, seeds from it, and restarts best-tracking. The same notebook covers every subsequent session — run it repeatedly until step 5,500. |
 | [`notebooks/04_test.ipynb`](notebooks/04_test.ipynb) | Generation smoke test. Loads the newest checkpoint, verifies the tokenizer round-trips, generates from four prompts. |
-| [`notebooks/05_upload_hf.ipynb`](notebooks/05_upload_hf.ipynb) | Publishes the most-trained checkpoint of every attached run to Hugging Face as bf16 safetensors, one git revision per run. |
+| [`notebooks/05_upload_hf.ipynb`](notebooks/05_upload_hf.ipynb) | Publishes the most-trained checkpoint of every attached run to Hugging Face as bf16 safetensors, one folder per run under `runs/`. |
 
 ### Project metadata
 
@@ -684,33 +684,56 @@ batches is 768 device synchronizations per optimizer step. Removing them is a kn
 **[`ShayonSarker/KochiLLM-v1.0`](https://huggingface.co/ShayonSarker/KochiLLM-v1.0)**.
 
 It converts the **most-trained** checkpoint of every attached run to bf16 safetensors (~2.05 GB) and
-pushes each as its own git revision, tagged `run-NN`, with `metadata.json` recording step count,
-validation loss, and source run. `main` always holds the highest-step checkpoint and is only
-overwritten by a *higher* step count, so the notebook is order-independent and safe to re-run.
+commits each one into its own folder on `main`, numbered **chronologically by step count**:
+
+```
+runs/
+├── index.json          manifest: step, tokens seen, val loss, source run
+├── run-01/             earliest run (step 970)
+│   ├── model.safetensors
+│   ├── config.json
+│   └── metadata.json
+└── run-09/             final run (step 5,499, val 3.96) — the published model
+```
+
+Each run is committed separately into its own folder, so the notebook is order-independent and safe to
+re-run: a repeat overwrites only that run's folder. `runs/index.json` merges across sessions, so batches
+accumulate rather than clobber.
 
 > It picks the highest-step checkpoint per run rather than literally `best_model.pth`, because several
 > early runs carry a stale Phase-1 `best_model.pth` while their real weights sit in
 > `latest_backup_model.pth`.
 
+> Folders are numbered by step count, not by Kaggle slug, because `trainning-3` and
+> `trainning-3-different-dataset` both end in `3` and would collide.
+
+> `metadata.json` carries a `val_loss_is_phase2` flag. Checkpoints saved before the Phase-2
+> best-tracking fix hold the *Phase-1 Alpaca* loss (3.8501) and have no `latest_val_loss`; where the
+> flag is `false`, the honest reading is "step N of a run whose Phase-2 validation loss was not
+> separately recorded", not "this run scored 3.85".
+
 **Not an `AutoModel` release.** The tokenizer is a custom pickle and the architecture is custom code,
 so the repo ships `architecture.py`, `tokenizer.py`, `data_loader.py`, `generate.py`,
-`prepare_data.py`, `train_custom.py`, `custom_bpe_tokenizer.pkl`, `config.json`, and
+`prepare_data.py`, `train_custom.py`, `custom_bpe_tokenizer.pkl`, and a per-run `config.json` +
 `model.safetensors`, plus load instructions in the model card. Embedding and output projection are
-tied, so `output.weight` is omitted from the safetensors file (recorded in `metadata.json`) and
+tied, so `output.weight` is omitted from each safetensors file (recorded in `metadata.json`) and
 restored on load:
 
 ```python
 import json, torch
+from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 from architecture import MyCustomLLM
 from tokenizer import MyCustomTokenizer
 
-config = json.load(open('config.json'))
+REPO, TAG = 'ShayonSarker/KochiLLM-v1.0', 'run-09'   # see runs/index.json
+
+config = json.load(open(hf_hub_download(REPO, 'runs/%s/config.json' % TAG, token=...)))
 tok = MyCustomTokenizer(vocab_size=config['vocab_size'])
 tok.load('custom_bpe_tokenizer.pkl')
 
 model = MyCustomLLM(**config)                 # re-ties embed.weight <-> output.weight
-sd = load_file('model.safetensors')
+sd = load_file(hf_hub_download(REPO, 'runs/%s/model.safetensors' % TAG, token=...))
 sd['output.weight'] = sd['embed.weight']      # dropped at save time
 model.load_state_dict(sd, strict=False)
 model.eval().cuda().to(torch.bfloat16)
@@ -732,7 +755,7 @@ Everything runs on Kaggle notebooks with **GPU T4 ×2**. Only the data cells nee
 | 2 | `02_phase2_pretrain.ipynb` | Phase-1 output | ~180M tokens encoded (~40 min) + first Phase-2 session |
 | 3 | `03_phase2_continue.ipynb` | previous run's output | next session — **repeat until step 5,500** |
 | 4 | `04_test.ipynb` | final output | generation samples |
-| 5 | `05_upload_hf.ipynb` | any run outputs | Hugging Face revisions |
+| 5 | `05_upload_hf.ipynb` | any run outputs | `runs/run-NN/` folders + manifest on Hugging Face |
 
 Each continuation session is capped at 10 hours and writes `latest_backup_model.pth`; the final
 session exits the loop normally and also writes the endpoint checkpoint. The continuation notebook is
