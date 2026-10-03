@@ -1,0 +1,25 @@
+# Model weights and tokenized data are not in Git.
+# Weights are published on Hugging Face; tokenized .bin shards are reproducible.
+*.pth
+*.pt
+*.bin
+*.pkl
+*.safetensors
+*.zip
+
+# Discarded v0 prototype artifacts (dim=512, 8L, 8k vocab) kept locally only.
+archive/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

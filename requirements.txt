@@ -1,0 +1,7 @@
+# Runtime
+torch>=2.4          # FSDP1 (FULL_SHARD) requires torch.distributed.fsdp
+numpy>=1.26         # memmap-backed tokenized data
+
+# Notebooks only (not imported by the library modules)
+datasets>=2.20      # streaming FineWeb-Edu / Cosmopedia-v2
+huggingface_hub>=0.24
